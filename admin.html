@@ -1,0 +1,972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin | Lumina Weight</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f3f4f6;
+  }
+
+  /* (Optional) Trust bar styling so it doesn't look naked */
+  #trust-bar{
+    background: linear-gradient(90deg, #22c55e, #16a34a);
+    color:#fff;
+    font-size:.85rem;
+    font-weight:600;
+    padding:6px 0;
+  }
+  #trust-bar span{ white-space: nowrap; }
+
+  .navbar { background: #020617; }
+  .navbar-brand { color: #fff; font-weight: 700; }
+  .navbar .nav-link { color: #e5e7eb; }
+  .navbar .nav-link:hover { color: #ffffff; }
+
+  .section-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    margin-bottom: 24px;
+  }
+
+  .order-card,
+  .review-card {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    margin-bottom: 12px;
+  }
+
+  .review-meta { font-size: 0.85rem; color: #6b7280; }
+
+  .btn-row {
+    display: grid;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .items-box{
+    margin-top:10px;
+    background:#f8fafc;
+    border:1px solid rgba(15,23,42,.08);
+    border-radius:12px;
+    padding:10px 12px;
+    font-size:.9rem;
+    color:#0f172a;
+    white-space: pre-line;
+  }
+
+  .items-box strong{
+    font-size:.85rem;
+    color:#334155;
+    display:block;
+    margin-bottom:6px;
+  }
+
+  .muted-line{
+    color:#64748b;
+    font-size:.85rem;
+  }
+
+  .mini-actions{
+    display:flex;
+    gap:6px;
+    flex-wrap:wrap;
+    margin-top:10px;
+  }
+</style>
+</head>
+
+<body>
+<!-- TRUST BAR -->
+<div id="trust-bar">
+  <div class="container d-flex justify-content-center gap-4 flex-wrap">
+    <span>🚚 <strong>Next Day Delivery</strong> on orders before <strong>3PM</strong></span>
+    <span>🔒 Secure Bank Transfer</span>
+    <span>🇬🇧 UK Dispatch</span>
+    <span>📦 Discreet Packaging</span>
+  </div>
+</div>
+
+<!-- NAV -->
+<nav class="navbar navbar-dark navbar-expand-lg">
+  <div class="container">
+    <a class="navbar-brand" href="index.html#home">🌙 Lumina Admin</a>
+
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#adminNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+
+    <div class="collapse navbar-collapse" id="adminNav">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item"><a class="nav-link" href="index.html#home">Store Home</a></li>
+        <li class="nav-item"><a class="nav-link" href="products.html">Products</a></li>
+        <li class="nav-item"><a class="nav-link" href="reviews.html">Reviews</a></li>
+        <li class="nav-item"><a class="nav-link" href="account.html">My Account</a></li>
+      </ul>
+
+      <button id="logout-btn" class="btn btn-outline-light btn-sm">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<!-- CONTENT -->
+<div class="container mt-4">
+  <!-- ORDERS -->
+  <div class="section-card mb-4">
+    <h3>Orders</h3>
+    <p id="admin-status" class="text-muted">Checking access…</p>
+    <div id="admin-warning"></div>
+    <div id="orders-list" class="mt-3"></div>
+  </div>
+
+  <!-- REVIEWS -->
+  <div class="section-card">
+    <h3>Pending Reviews</h3>
+    <p class="text-muted" id="reviews-status">Loading pending reviews…</p>
+    <div id="reviews-list" class="mt-3"></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+<script>
+  const SUPABASE_URL = "https://qketnqhfjfxbqiuqevnh.supabase.co";
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFrZXRucWhmamZ4YnFpdXFldm5oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQ2NjkzMzAsImV4cCI6MjA4MDI0NTMzMH0.JIrgLIwWIA5Gwu9K4BsgS0Y_jyax2G6irqkaf35aPys";
+  const ADMIN_EMAIL = "luminaweight@gmail.com";
+
+  const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // EmailJS init
+  (function () {
+    try {
+      if (window.emailjs) {
+        emailjs.init({ publicKey: "uZOuTrBdIAc6AmKjo" });
+      }
+    } catch (e) {
+      console.error("EmailJS init failed", e);
+    }
+  })();
+
+  const statusEl      = document.getElementById("admin-status");
+  const ordersEl      = document.getElementById("orders-list");
+  const warningEl     = document.getElementById("admin-warning");
+  const logoutBtn     = document.getElementById("logout-btn");
+  const reviewsStatus = document.getElementById("reviews-status");
+  const reviewsEl     = document.getElementById("reviews-list");
+
+  // Cache orders so buttons can reference them
+  const ordersCache = {};
+
+  function badge(status) {
+    status = (status || "Pending").toLowerCase();
+    if (status === "paid")      return `<span class="badge bg-success">PAID</span>`;
+    if (status === "packed")    return `<span class="badge bg-secondary">PACKED</span>`;
+    if (status === "shipped")   return `<span class="badge bg-primary">SHIPPED</span>`;
+    if (status === "cancelled") return `<span class="badge bg-danger">CANCELLED</span>`;
+    return `<span class="badge bg-warning text-dark">PENDING</span>`;
+  }
+
+  // ---- extras label helper ----
+  function extrasLabel(item) {
+    const n = (item?.name || "").toLowerCase();
+    const penHeads = item?.pen_heads ? String(item.pen_heads).trim() : "";
+    const syringes = item?.syringes ? String(item.syringes).trim() : "";
+
+    if (n.includes("pen") && penHeads) return ` (Pen heads: ${penHeads})`;
+    if (n.includes("vial") && syringes) return ` (Syringes: ${syringes})`;
+    return "";
+  }
+
+  // used for emails (now includes extras)
+  function buildItemsText(order) {
+    const items = order?.details?.items || [];
+    if (!items.length) return "Items not recorded.";
+    return items
+      .map((i) => {
+        const lineTotal = Number(i.line_total || (i.price_each || 0) * i.qty);
+        return `${i.qty} × ${i.name}${extrasLabel(i)} — £${lineTotal.toFixed(2)}`;
+      })
+      .join("\n");
+  }
+
+  // used for admin UI display
+  function buildItemsHtml(order) {
+    const items = order?.details?.items || [];
+    if (!items.length) return `<div class="items-box"><strong>Items</strong><div class="muted-line">No items recorded.</div></div>`;
+
+    const lines = items.map((i) => {
+      const lineTotal = Number(i.line_total || (i.price_each || 0) * i.qty);
+      return `${i.qty} × ${i.name}${extrasLabel(i)} — £${lineTotal.toFixed(2)}`;
+    }).join("\n");
+
+    return `
+      <div class="items-box">
+        <strong>Items</strong>
+        ${lines}
+      </div>
+    `;
+  }
+
+  // ---------- ADDRESS ----------
+  function getCustomer(order){
+    return order?.details?.customer || {};
+  }
+
+  function buildAddressText(order){
+    const c = getCustomer(order);
+    const parts = [
+      c.name ? String(c.name).trim() : "",
+      c.address1 ? String(c.address1).trim() : "",
+      c.address2 ? String(c.address2).trim() : "",
+      c.city ? String(c.city).trim() : "",
+      c.postcode ? String(c.postcode).trim() : "",
+      c.phone ? `Phone: ${String(c.phone).trim()}` : ""
+    ].filter(Boolean);
+    return parts.join("\n");
+  }
+
+  function buildAddressHtml(order){
+    const c = getCustomer(order);
+    const hasAny = c && (c.address1 || c.city || c.postcode || c.name || c.phone || c.address2);
+    if(!hasAny){
+      return `
+        <div class="items-box" style="margin-top:8px;">
+          <strong>📍 Delivery address</strong>
+          <div class="muted-line">No address recorded.</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="items-box" style="margin-top:8px;">
+        <strong>📍 Delivery address</strong>
+        ${c.name ? `${escapeHtml(c.name)}\n` : ""}
+        ${c.address1 ? `${escapeHtml(c.address1)}\n` : ""}
+        ${c.address2 ? `${escapeHtml(c.address2)}\n` : ""}
+        ${c.city ? `${escapeHtml(c.city)}\n` : ""}
+        ${c.postcode ? `${escapeHtml(c.postcode)}\n` : ""}
+        ${c.phone ? `📞 ${escapeHtml(c.phone)}` : ""}
+      </div>
+    `;
+  }
+
+  // tiny HTML escape to prevent any weird input breaking layout
+  function escapeHtml(str){
+    return String(str || "")
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+
+  // ---------- COPY ADDRESS ----------
+  async function copyAddressById(orderId){
+    const order = ordersCache[orderId];
+    if(!order) return alert("Order not found.");
+
+    const text = buildAddressText(order);
+    if(!text.trim()) return alert("No address found on this order.");
+
+    try{
+      await navigator.clipboard.writeText(text);
+      alert("Address copied ✅");
+    }catch(e){
+      // fallback
+      try{
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        alert("Address copied ✅");
+      }catch(err){
+        console.error("Copy failed", err);
+        alert("Copy failed — your browser blocked it.");
+      }
+    }
+  }
+
+  // ---------- PRINT PACKING SLIP ----------
+  function printPackingSlipById(orderId){
+    const order = ordersCache[orderId];
+    if(!order) return alert("Order not found.");
+
+    const c = getCustomer(order);
+    const ref = order.reference || order.id;
+    const created = order.created_at ? new Date(order.created_at).toLocaleString() : "";
+    const status = order.status || "Pending";
+    const total = `£${Number(order.total_amount || 0).toFixed(2)}`;
+
+    const items = (order?.details?.items || []).map(i=>{
+      const lineTotal = Number(i.line_total || (i.price_each || 0) * i.qty);
+      return `
+        <tr>
+          <td style="padding:8px; border-bottom:1px solid #ddd;">${escapeHtml(i.qty)} × ${escapeHtml(i.name)}${escapeHtml(extrasLabel(i))}</td>
+          <td style="padding:8px; border-bottom:1px solid #ddd; text-align:right;">£${lineTotal.toFixed(2)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const w = window.open("", "_blank", "width=800,height=900");
+    if(!w) return alert("Popup blocked — allow popups then try again.");
+
+    w.document.open();
+    w.document.write(`
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Packing Slip ${escapeHtml(ref)}</title>
+        <style>
+          body{ font-family: system-ui, -apple-system, Segoe UI, sans-serif; padding:24px; color:#111; }
+          .top{ display:flex; justify-content:space-between; gap:16px; }
+          .box{ border:1px solid #ddd; border-radius:12px; padding:14px; }
+          h1{ margin:0 0 8px; font-size:20px; }
+          .muted{ color:#666; font-size:12px; margin-top:4px; }
+          table{ width:100%; border-collapse:collapse; margin-top:16px; }
+          .right{ text-align:right; }
+          .big{ font-size:18px; font-weight:800; }
+          @media print{
+            button{ display:none; }
+            body{ padding:0; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="top">
+          <div class="box" style="flex:1;">
+            <h1>Lumina Weight — Packing Slip</h1>
+            <div><strong>Order Ref:</strong> ${escapeHtml(ref)}</div>
+            <div><strong>Date:</strong> ${escapeHtml(created)}</div>
+            <div><strong>Status:</strong> ${escapeHtml(status)}</div>
+            <div class="muted">Internal use only</div>
+          </div>
+          <div class="box" style="flex:1;">
+            <div style="font-weight:800; margin-bottom:6px;">Ship to</div>
+            <div>${c.name ? escapeHtml(c.name) + "<br>" : ""}</div>
+            <div>${c.address1 ? escapeHtml(c.address1) + "<br>" : ""}</div>
+            <div>${c.address2 ? escapeHtml(c.address2) + "<br>" : ""}</div>
+            <div>${c.city ? escapeHtml(c.city) + "<br>" : ""}</div>
+            <div>${c.postcode ? escapeHtml(c.postcode) + "<br>" : ""}</div>
+            <div>${c.phone ? "📞 " + escapeHtml(c.phone) : ""}</div>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th style="text-align:left; padding:8px; border-bottom:2px solid #111;">Items</th>
+              <th style="text-align:right; padding:8px; border-bottom:2px solid #111;">Line total</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${items || `<tr><td style="padding:8px;">No items recorded</td><td></td></tr>`}
+          </tbody>
+        </table>
+
+        <div style="display:flex; justify-content:flex-end; margin-top:14px;">
+          <div class="box" style="min-width:260px;">
+            <div class="right">Total</div>
+            <div class="right big">${escapeHtml(total)}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <button onclick="window.print()">Print</button>
+        </div>
+      </body>
+      </html>
+    `);
+    w.document.close();
+    w.focus();
+    w.print();
+  }
+
+  // ---------- MARK PACKED ----------
+  async function markPackedById(orderId){
+    const order = ordersCache[orderId];
+    if(!order) return alert("Order not found.");
+
+    if(!confirm("Mark this order as PACKED?")) return;
+
+    const { error } = await supabaseClient
+      .from("Orders")
+      .update({ status: "Packed" })
+      .eq("id", orderId);
+
+    if(error){
+      console.error("Packed update failed", error);
+      alert("Packed update failed — check Supabase policy.");
+      return;
+    }
+
+    ordersCache[orderId].status = "Packed";
+    loadOrders();
+  }
+
+  // ---------- EMAIL: SHIPPED ----------
+  function sendShippedEmail(order) {
+    if (!order || !window.emailjs) return;
+
+    const customer = order.details?.customer || {};
+    const toEmail = customer.email || order.customer_email || order.email || "";
+    const customerName = customer.name || order.customer_name || order.name || "Customer";
+
+    if (!toEmail) {
+      alert("No email found on this order.");
+      return;
+    }
+
+    const ref   = order.reference || order.id;
+    const total = `£${Number(order.total_amount || 0).toFixed(2)}`;
+    const items = buildItemsText(order);
+
+    return emailjs.send("service_i5zi096", "template_shipped", {
+      email: toEmail,
+      customer_name: customerName,
+      order_reference: ref,
+      order_items: items,
+      order_total: total,
+    });
+  }
+
+  // ---------- EMAIL: CANCELLED ----------
+  function sendCancelledEmail(order) {
+    if (!order || !window.emailjs) return;
+
+    const customer = order.details?.customer || {};
+    const toEmail = customer.email || order.customer_email || order.email || "";
+    const customerName = customer.name || order.customer_name || order.name || "Customer";
+
+    if (!toEmail) {
+      alert("No email found on this order.");
+      return;
+    }
+
+    const ref = order.reference || order.id;
+    const orderDate = order.created_at
+      ? new Date(order.created_at).toLocaleString()
+      : new Date().toLocaleString();
+
+    return emailjs.send("service_i5zi096", "template_cancelled", {
+      email: toEmail,
+      customer_name: customerName,
+      order_ref: ref,
+      order_date: orderDate
+    });
+  }
+
+  // ---------- EMAIL: PAYMENT RECEIVED ----------
+  function sendPaidEmail(order) {
+    if (!order || !window.emailjs) return;
+
+    const customer = order.details?.customer || {};
+    const toEmail = customer.email || order.customer_email || order.email || "";
+    const customerName = customer.name || order.customer_name || order.name || "Customer";
+
+    if (!toEmail) {
+      alert("No email found on this order.");
+      return;
+    }
+
+    const ref = order.reference || order.id;
+    const total = `£${Number(order.total_amount || 0).toFixed(2)}`;
+
+    return emailjs.send("service_i5zi096", "template_paid", {
+      email: toEmail,
+      customer_name: customerName,
+      order_ref: ref,
+      order_total: total
+    });
+  }
+
+  // ---------- BUTTON HANDLERS ----------
+  async function sendShippedEmailById(orderId) {
+    const order = ordersCache[orderId];
+    if (!order) return alert("Order not found.");
+
+    if (!confirm("Send SHIPPED email to customer?")) return;
+
+    try {
+      await sendShippedEmail(order);
+      alert("Shipped email sent ✅");
+    } catch (e) {
+      console.error("Shipped email failed", e);
+      alert("Shipped email failed — check console");
+    }
+  }
+
+  async function sendCancelledEmailById(orderId) {
+    const order = ordersCache[orderId];
+    if (!order) return alert("Order not found.");
+
+    if (!confirm("Send CANCELLED email to customer?")) return;
+
+    try {
+      await sendCancelledEmail(order);
+      alert("Cancelled email sent ✅");
+    } catch (e) {
+      console.error("Cancelled email failed", e);
+      alert("Cancelled email failed — check console");
+    }
+  }
+
+  async function markPaidAndSendById(orderId) {
+    const order = ordersCache[orderId];
+    if (!order) return alert("Order not found.");
+
+    if (!confirm("Confirm PAYMENT RECEIVED and email customer?")) return;
+
+    try {
+      // send email first
+      await sendPaidEmail(order);
+
+      // then update status
+      const { error } = await supabaseClient
+        .from("Orders")
+        .update({ status: "Paid" })
+        .eq("id", orderId);
+
+      if (error) {
+        console.error("Failed to update order to Paid", error);
+        alert("Email sent, but status update failed — check Supabase policies.");
+        return;
+      }
+
+      ordersCache[orderId].status = "Paid";
+      alert("Payment received email sent 💷✅");
+      loadOrders();
+    } catch (e) {
+      console.error("Payment email failed", e);
+      alert("Payment email failed — check console");
+    }
+  }
+
+  // ---------- ✅ CANCEL + RESTOCK (NEW) ----------
+  async function cancelAndRestockById(orderId){
+    if(!orderId) return;
+
+    if(!confirm("Cancel this order AND add items back to stock?")) return;
+
+    try{
+      // Re-fetch fresh order to avoid stale cache / double clicks
+      const { data: order, error: fetchErr } = await supabaseClient
+        .from("Orders")
+        .select("id, status, details, reference, total_amount, created_at")
+        .eq("id", orderId)
+        .single();
+
+      if(fetchErr || !order){
+        console.error("Could not fetch order", fetchErr);
+        alert("Could not fetch order — check console.");
+        return;
+      }
+
+      const details = order.details || {};
+      const meta = details.meta || {};
+      const alreadyRestocked = !!meta.restocked_at;
+
+      if(alreadyRestocked){
+        alert("This order was already restocked before. Stopping to prevent double stock.");
+        return;
+      }
+
+      const items = details.items || [];
+      if(!Array.isArray(items) || items.length === 0){
+        alert("No items found in this order to restock.");
+        return;
+      }
+
+      const nameQty = items.map(i => ({
+        name: String(i.name || "").trim(),
+        qty: Number(i.qty || 0)
+      })).filter(x => x.name && x.qty > 0);
+
+      if(!nameQty.length){
+        alert("Order items had no usable name/qty to restock.");
+        return;
+      }
+
+      // Fetch matching products by name
+      const productNames = nameQty.map(x => x.name);
+
+      const { data: products, error: prodErr } = await supabaseClient
+        .from("Products")
+        .select("id, name, stock")
+        .in("name", productNames);
+
+      if(prodErr){
+        console.error("Error fetching products", prodErr);
+        alert("Could not fetch products to restock — check console.");
+        return;
+      }
+
+      // Update each product stock (+ qty)
+      for(const line of nameQty){
+        const p = (products || []).find(pp => pp.name === line.name);
+        if(!p){
+          console.warn("Product not found for restock:", line.name);
+          continue; // skip missing names (doesn't hard-fail)
+        }
+
+        const currentStock = Number(p.stock || 0);
+        const newStock = Math.max(0, currentStock + line.qty);
+
+        const { error: upErr } = await supabaseClient
+          .from("Products")
+          .update({ stock: newStock })
+          .eq("id", p.id);
+
+        if(upErr){
+          console.error("Stock update failed for", line.name, upErr);
+          alert(`Failed to restock: ${line.name} — stopping. Check console.`);
+          return;
+        }
+      }
+
+      // Mark order cancelled + set restock meta flag
+      const session = await supabaseClient.auth.getSession();
+      const who = session?.data?.session?.user?.email || "admin";
+
+      const updatedDetails = {
+        ...details,
+        meta: {
+          ...(details.meta || {}),
+          restocked_at: new Date().toISOString(),
+          restocked_by: who
+        }
+      };
+
+      const { error: ordUpErr } = await supabaseClient
+        .from("Orders")
+        .update({ status: "Cancelled", details: updatedDetails })
+        .eq("id", orderId);
+
+      if(ordUpErr){
+        console.error("Order update failed (after stock restock!)", ordUpErr);
+        alert("Stock was restocked, but order status update failed. Check Supabase policies/console.");
+        return;
+      }
+
+      // Send cancelled email after success
+      try{
+        const emailOrder = { ...order, status: "Cancelled", details: updatedDetails };
+        await sendCancelledEmail(emailOrder);
+      }catch(emailErr){
+        console.error("Cancelled email failed (but order was cancelled/restocked)", emailErr);
+        alert("Order cancelled + restocked, but cancelled email failed. Check console.");
+        loadOrders();
+        return;
+      }
+
+      alert("Order cancelled + stock restored + email sent ✅");
+      loadOrders();
+
+    }catch(e){
+      console.error("Cancel+Restock failed", e);
+      alert("Cancel + Restock failed — check console.");
+    }
+  }
+
+  // ---------- STATUS UPDATE ----------
+  async function updateStatus(id, value) {
+    const { error } = await supabaseClient
+      .from("Orders")
+      .update({ status: value })
+      .eq("id", id);
+
+    if (error) {
+      alert("Update failed – check Supabase policy");
+      console.error(error);
+      return;
+    }
+
+    if (ordersCache[id]) ordersCache[id].status = value;
+    loadOrders();
+  }
+
+  // ---------- LOAD ORDERS ----------
+  async function loadOrders() {
+    const { data: orders, error } = await supabaseClient
+      .from("Orders")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      statusEl.textContent = "Could not load orders.";
+      console.error(error);
+      return;
+    }
+
+    if (!orders || orders.length === 0) {
+      statusEl.textContent = "No orders yet.";
+      ordersEl.innerHTML = "";
+      return;
+    }
+
+    statusEl.textContent = `${orders.length} orders found`;
+
+    for (const o of orders) ordersCache[o.id] = o;
+
+    ordersEl.innerHTML = orders.map((order) => {
+      const created = new Date(order.created_at).toLocaleString();
+      const ref = order.reference || order.id;
+      const status = order.status || "Pending";
+      const email =
+        order.details?.customer?.email ||
+        order.customer_email ||
+        order.email ||
+        "No email";
+      const name =
+        order.details?.customer?.name ||
+        order.customer_name ||
+        order.name ||
+        "Customer";
+      const total = Number(order.total_amount || 0).toFixed(2);
+
+      const statusLower = (status || "").toLowerCase();
+      const isPaid = statusLower === "paid";
+      const isCancelled = statusLower === "cancelled";
+      const restockedAt = order.details?.meta?.restocked_at
+        ? new Date(order.details.meta.restocked_at).toLocaleString()
+        : "";
+
+      return `
+        <div class="order-card">
+          <div class="d-flex justify-content-between align-items-start">
+            <div style="flex:1; padding-right:14px;">
+              <strong>${escapeHtml(ref)}</strong><br>
+              <small>${escapeHtml(created)}</small><br>
+              <small>${escapeHtml(name)} — ${escapeHtml(email)}</small>
+              ${restockedAt ? `<div class="muted-line mt-1">Restocked: ${escapeHtml(restockedAt)}</div>` : ``}
+              ${buildAddressHtml(order)}
+              ${buildItemsHtml(order)}
+            </div>
+
+            <div class="text-end" style="min-width: 260px;">
+              <div class="mb-1">${badge(status)}</div>
+              <div class="fw-bold">£${escapeHtml(total)}</div>
+
+              <select class="form-select form-select-sm mt-2"
+                onchange="updateStatus('${order.id}', this.value)">
+                <option ${status === "Pending" ? "selected" : ""}>Pending</option>
+                <option ${status === "Paid" ? "selected" : ""}>Paid</option>
+                <option ${status === "Packed" ? "selected" : ""}>Packed</option>
+                <option ${status === "Shipped" ? "selected" : ""}>Shipped</option>
+                <option ${status === "Cancelled" ? "selected" : ""}>Cancelled</option>
+              </select>
+
+              <div class="mini-actions">
+                <button class="btn btn-sm btn-outline-dark"
+                  onclick="copyAddressById('${order.id}')">
+                  📋 Copy address
+                </button>
+
+                <button class="btn btn-sm btn-outline-secondary"
+                  onclick="printPackingSlipById('${order.id}')">
+                  🖨️ Print slip
+                </button>
+
+                <button class="btn btn-sm btn-secondary"
+                  onclick="markPackedById('${order.id}')">
+                  ✅ Mark Packed
+                </button>
+              </div>
+
+              <div class="btn-row">
+                <button class="btn btn-sm btn-success"
+                  ${isPaid ? "disabled" : ""}
+                  onclick="markPaidAndSendById('${order.id}')">
+                  💷 Send Payment Received
+                </button>
+
+                <button class="btn btn-sm btn-primary"
+                  onclick="sendShippedEmailById('${order.id}')">
+                  📦 Send Shipped Email
+                </button>
+
+                <button class="btn btn-sm btn-danger"
+                  onclick="sendCancelledEmailById('${order.id}')">
+                  ❌ Send Cancelled Email
+                </button>
+
+                <!-- ✅ NEW: Cancel + Restock -->
+                <button class="btn btn-sm btn-outline-danger"
+                  ${isCancelled ? "disabled" : ""}
+                  onclick="cancelAndRestockById('${order.id}')">
+                  ↩️ Cancel + Restock
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  // ------- REVIEWS MODERATION -------
+  async function loadPendingReviews() {
+    reviewsStatus.textContent = "Loading pending reviews…";
+
+    const { data, error } = await supabaseClient
+      .from("Reviews")
+      .select("id, name, rating, review_text, approved, created_at")
+      .eq("approved", false)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("Error loading reviews", error);
+      reviewsStatus.textContent = "Could not load reviews.";
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      reviewsStatus.textContent = "No pending reviews 🎉";
+      reviewsEl.innerHTML = "";
+      return;
+    }
+
+    reviewsStatus.textContent = `${data.length} review(s) pending`;
+
+    reviewsEl.innerHTML = data.map((review) => {
+      const created = review.created_at ? new Date(review.created_at).toLocaleString() : "";
+      const stars = review.rating ? "★".repeat(review.rating) + "☆".repeat(5 - review.rating) : "";
+      const name = review.name || "Anonymous";
+      const message = review.review_text || "";
+
+      return `
+        <div class="review-card">
+          <div class="d-flex justify-content-between">
+            <div>
+              <strong>${escapeHtml(name)}</strong>
+              <div class="my-1">${escapeHtml(stars)}</div>
+              <p class="mb-1">${escapeHtml(message)}</p>
+              <small class="review-meta">${escapeHtml(created)}</small>
+            </div>
+            <div class="text-end" style="min-width: 140px;">
+              <button class="btn btn-sm btn-success mb-1" onclick="publishReview('${review.id}')">✅ Publish</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteReview('${review.id}')">🗑 Delete</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function publishReview(id) {
+    if (!confirm("Publish this review?")) return;
+
+    const { error } = await supabaseClient
+      .from("Reviews")
+      .update({ approved: true })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error publishing review", error);
+      alert("Failed to publish review – check console.");
+      return;
+    }
+    loadPendingReviews();
+  }
+
+  async function deleteReview(id) {
+    if (!confirm("Delete this review permanently?")) return;
+
+    const { error } = await supabaseClient
+      .from("Reviews")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error deleting review", error);
+      alert("Could not delete review – check console.");
+      return;
+    }
+    loadPendingReviews();
+  }
+
+  // INIT + AUTH CHECK
+  async function init() {
+    statusEl.textContent = "Checking access…";
+
+    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+
+    if (sessionError || !sessionData?.session?.user) {
+      window.location.href = "index.html";
+      return;
+    }
+
+    const user = sessionData.session.user;
+
+    if ((user.email || "").toLowerCase() !== ADMIN_EMAIL.toLowerCase()) {
+      warningEl.innerHTML = `<div class="alert alert-danger">Access denied.</div>`;
+      statusEl.textContent = "Not authorised";
+      reviewsStatus.textContent = "Not authorised";
+      return;
+    }
+
+    statusEl.textContent = "Admin verified ✅";
+    loadOrders();
+    loadPendingReviews();
+  }
+
+  logoutBtn.onclick = async () => {
+    await supabaseClient.auth.signOut();
+    location.href = "index.html";
+  };
+
+  // expose functions for inline onclick handlers
+  window.updateStatus = updateStatus;
+  window.sendShippedEmailById = sendShippedEmailById;
+  window.sendCancelledEmailById = sendCancelledEmailById;
+  window.markPaidAndSendById = markPaidAndSendById;
+
+  window.copyAddressById = copyAddressById;
+  window.printPackingSlipById = printPackingSlipById;
+  window.markPackedById = markPackedById;
+
+  window.cancelAndRestockById = cancelAndRestockById;
+
+  window.publishReview = publishReview;
+  window.deleteReview = deleteReview;
+
+  init();
+
+  // ------- INACTIVITY LOGOUT -------
+  const INACTIVITY_TIMEOUT = 15 * 60 * 1000;
+  let inactivityTimer;
+
+  function resetInactivityTimer() {
+    if (inactivityTimer) clearTimeout(inactivityTimer);
+
+    inactivityTimer = setTimeout(async () => {
+      try {
+        await supabaseClient.auth.signOut();
+        window.location.href = "account.html?timeout=1";
+      } catch (e) {
+        console.error("Error during inactivity logout", e);
+      }
+    }, INACTIVITY_TIMEOUT);
+  }
+
+  ["click", "mousemove", "keydown", "scroll", "touchstart"].forEach((evt) => {
+    window.addEventListener(evt, resetInactivityTimer, { passive: true });
+  });
+
+  resetInactivityTimer();
+</script>
+</body>
+</html>
